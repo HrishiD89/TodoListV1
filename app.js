@@ -1,12 +1,13 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
-var items = [];
+var items = ["Buy Food", "Cook FOod", "Eat food"];
 
 app.use(express());
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+app.use(express.static("public"));
 
 app.get("/", (req, res) => {
   var today = new Date();
