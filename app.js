@@ -1,9 +1,10 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const date = require(__dirname + "/date.js");
+const mongoose = require("mongoose");
 
 const app = express();
-const items = ["Buy Food", "Cook FOod", "Eat food"];
+// const items = ["Buy Food", "Cook FOod", "Eat food"];
 const workItems = [];
 
 app.use(express());
@@ -12,35 +13,88 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(express.static("public"));
 
+mongoose.connect("mongodb://127.0.0.1:27017/todolistDB", {
+  useNewUrlParser: true,
+});
+
+// Making a Schema
+const itemSchema = new mongoose.Schema({
+  name: String,
+});
+// mongoose model
+const Item = new mongoose.model("Item", itemSchema);
+
+const item1 = new Item({
+  name: "Welcome to the TodoList",
+});
+const item2 = new Item({
+  name: "Hit the + button to add a new Item",
+});
+const item3 = new Item({
+  name: "<--Hit this to delete an item",
+});
+
+const defaultItems = [item1, item2, item3];
+
+// listSchema
+const listSchema = {
+  name: String,
+  items: [itemSchema],
+};
+const List = mongoose.model("List", listSchema);
+
 app.get("/", (req, res) => {
-  let day = date.getDate();
-  res.render("list", {
-    listTitle: day,
-    newListItem: items,
-  });
+  Item.find()
+    .then((foundItems) => {
+      if (foundItems.length === 0) {
+        // insert item in mongoose
+        Item.insertMany(defaultItems)
+          .then(() => {
+            console.log("Sucessfully saved default item to DB");
+          })
+          .catch((err) => {
+            console.log(err);
+          });
+        res.redirect("/");
+      } else {
+        res.render("list", {
+          listTitle: "Today",
+          newListItem: foundItems,
+        });
+      }
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 });
 
-app.get("/work", (req, res) => {
-  res.render("list", {
-    listTitle: "Work List",
-    newListItem: workItems,
-  });
-});
-
-app.get("/about", (req, res) => {
-  res.render("about");
-});
+// app.get("/about", (req, res) => {
+//   res.render("about");
+// });
 
 app.post("/", (req, res) => {
-  let item = req.body.newItem;
+  let itemName = req.body.newItem;
 
-  if (req.body.list == "Work") {
-    workItems.push(item);
-    res.redirect("/work");
-  } else {
-    items.push(item);
-    res.redirect("/");
-  }
+  const item = new Item({
+    name: itemName,
+  });
+
+  item.save();
+
+  res.redirect("/");
+});
+
+app.post("/delete", (req, res) => {
+  const checkedItemId = req.body.checkbox.trim();
+
+  Item.findByIdAndRemove(checkedItemId)
+    .then(() => {
+      console.log("successfully deleted from the todoList");
+      res.redirect("/");
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 });
 
 app.post("/work", (res, req) => {
@@ -49,6 +103,53 @@ app.post("/work", (res, req) => {
   res.redirect("/work");
 });
 
-app.listen(3000, () => {
-  console.log("The Server is running at port 3000");
+// express_route_parameter
+// app.get("/:todoTitle", (req, res) => {
+//   let requestedTodoTitle = req.params.todoTitle;
+
+//   List.findOne({ name: requestedTodoTitle })
+//     .then((results) => {
+//       if (!results) {
+//         const list = new List({
+//           name: requestedTodoTitle,
+//           items: defaultItems,
+//         });
+//         list.save();
+//       } else {
+//         res.render("list", {
+//           listTitle: results.name,
+//           newListItem: results.items,
+//         });
+//       }
+//     })
+//     .catch((err) => {
+//       console.log(err);
+//     });
+// });
+app.get("/:todoTitle", async (req, res) => {
+  const requestedTodoTitle = req.params.todoTitle;
+
+  try {
+    const results = await List.findOne({ name: requestedTodoTitle });
+
+    if (!results) {
+      const list = new List({
+        name: requestedTodoTitle,
+        items: defaultItems,
+      });
+      await list.save();
+      res.redirect("/" + requestedTodoTitle);
+    }
+
+    res.render("list", {
+      listTitle: results ? results.name : requestedTodoTitle,
+      newListItem: results ? results.items : defaultItems,
+    });
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+app.listen(3200, () => {
+  console.log("The Server is running at port 3200");
 });
