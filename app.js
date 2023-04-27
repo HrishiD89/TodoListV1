@@ -2,9 +2,9 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const date = require(__dirname + "/date.js");
 const mongoose = require("mongoose");
+const _ = require("lodash");
 
 const app = express();
-// const items = ["Buy Food", "Cook FOod", "Eat food"];
 const workItems = [];
 
 app.use(express());
@@ -13,9 +13,12 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(express.static("public"));
 
-mongoose.connect("mongodb://127.0.0.1:27017/todolistDB", {
-  useNewUrlParser: true,
-});
+mongoose.connect(
+  "mongodb+srv://mongo:mongo@cluster0.mzofbvq.mongodb.net/todolistDB?",
+  {
+    useNewUrlParser: true,
+  }
+);
 
 // Making a Schema
 const itemSchema = new mongoose.Schema({
@@ -74,60 +77,63 @@ app.get("/", (req, res) => {
 
 app.post("/", (req, res) => {
   let itemName = req.body.newItem;
+  let listName = req.body.list;
 
   const item = new Item({
     name: itemName,
   });
 
-  item.save();
-
-  res.redirect("/");
+  if (listName === "Today") {
+    item.save();
+    res.redirect("/");
+  } else {
+    List.findOne({ name: listName })
+      .then((foundList) => {
+        foundList.items.push(item);
+        foundList.save();
+        res.redirect("/" + listName);
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  }
 });
 
 app.post("/delete", (req, res) => {
   const checkedItemId = req.body.checkbox.trim();
+  const listName = req.body.listName;
 
-  Item.findByIdAndRemove(checkedItemId)
-    .then(() => {
-      console.log("successfully deleted from the todoList");
-      res.redirect("/");
-    })
-    .catch((err) => {
-      console.log(err);
-    });
+  if (listName === "Today") {
+    Item.findByIdAndRemove(checkedItemId)
+      .then(() => {
+        console.log("successfully deleted from the todoList");
+        res.redirect("/");
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  } else {
+    List.findOneAndUpdate(
+      { name: listName },
+      { $pull: { items: { _id: checkedItemId } } }
+    )
+      .then((foundList) => {
+        res.redirect("/" + listName);
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  }
 });
 
-app.post("/work", (res, req) => {
-  let item = req.body.newItem;
-  workItems.push(item);
-  res.redirect("/work");
-});
-
-// express_route_parameter
-// app.get("/:todoTitle", (req, res) => {
-//   let requestedTodoTitle = req.params.todoTitle;
-
-//   List.findOne({ name: requestedTodoTitle })
-//     .then((results) => {
-//       if (!results) {
-//         const list = new List({
-//           name: requestedTodoTitle,
-//           items: defaultItems,
-//         });
-//         list.save();
-//       } else {
-//         res.render("list", {
-//           listTitle: results.name,
-//           newListItem: results.items,
-//         });
-//       }
-//     })
-//     .catch((err) => {
-//       console.log(err);
-//     });
+// app.post("/work", (res, req) => {
+//   let item = req.body.newItem;
+//   workItems.push(item);
+//   res.redirect("/work");
 // });
+
 app.get("/:todoTitle", async (req, res) => {
-  const requestedTodoTitle = req.params.todoTitle;
+  const requestedTodoTitle = _.capitalize(req.params.todoTitle);
 
   try {
     const results = await List.findOne({ name: requestedTodoTitle });
